@@ -73,6 +73,16 @@ current buffer belongs to, and does nothing outside one. commits.unified() and
 commits.split() show a buffer's own changes outside a browser, see
 |commits-unified|, so one global key can do both.
 
+commits.toggle_files() has no default key. In the list, it shows or hides the
+files of the commit under the cursor, from the commit or one of its files.
+Unlike commits.select(), it doesn't open a file's diff. For example, in
+on_attach: >lua
+
+    if kind == "list" then
+      vim.keymap.set("n", "<Space>", commits.toggle_files, opts)
+    end
+<
+
 The unified diff shows the file as of the commit: added and changed lines
 highlighted, removed lines shown above them, and unchanged lines folded. The
 split diff shows the file before the commit on the left and the commit's file

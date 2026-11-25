@@ -849,6 +849,23 @@ M.select = action(function(state)
 	end
 end)
 
+-- In the list, show or hide the files of the commit under the cursor, from the
+-- commit or one of its files. Hiding them from a file puts the cursor on its
+-- commit.
+M.toggle_files = action(function(state)
+	if vim.api.nvim_get_current_buf() ~= state.list_buf then
+		return
+	end
+	local at = state.rows[vim.fn.line(".")]
+	state.expanded[at.commit] = not state.expanded[at.commit]
+	render(state)
+	for i, row in ipairs(state.rows) do
+		if row.commit == at.commit and not row.file then
+			return vim.api.nvim_win_set_cursor(0, { i, 0 })
+		end
+	end
+end)
+
 -- Copy the commit's short hash, or hash:path on a file.
 M.copy = action(copy_hash)
 
