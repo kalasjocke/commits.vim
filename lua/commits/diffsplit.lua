@@ -5,6 +5,9 @@
 --
 -- Diff mode colors a line that only one side has the same on both sides, so
 -- each window maps the diff colors to its own.
+--
+-- The commit browser's split diff uses style(). toggle() shows the current
+-- buffer's changes the same way, with the index on the left.
 
 local M = {}
 
@@ -63,6 +66,86 @@ end
 function M.style(left, right)
 	style(left, "left")
 	style(right, "right")
+end
+
+-- The window in the current tab that shows the index for toggle().
+local function index_window()
+	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+		if vim.b[vim.api.nvim_win_get_buf(win)].commits_index then
+			return win
+		end
+	end
+end
+
+-- The buffer's file as the index has it. A file git doesn't track yet has no
+-- lines there, so all of its lines show as added.
+local function index_lines(path)
+	local dir, name = vim.fs.dirname(path), vim.fs.basename(path)
+	local inside = vim.system({ "git", "-C", dir, "rev-parse", "--is-inside-work-tree" }):wait()
+	if inside.code ~= 0 then
+		return nil
+	end
+	local show = vim.system({ "git", "-C", dir, "show", ":./" .. name }, { text = true }):wait()
+	if show.code ~= 0 then
+		return {}
+	end
+	local lines = vim.split(show.stdout, "\n")
+	if lines[#lines] == "" then
+		table.remove(lines)
+	end
+	return lines
+end
+
+-- Show the current buffer's changes as a split diff, with the index on the
+-- left, or close the split when it's open. Edits to the buffer show as you
+-- make them. Staging doesn't, until the split opens again.
+function M.toggle()
+	local left = index_window()
+	if left then
+		return vim.api.nvim_win_close(left, false)
+	end
+	local right, file = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+	local path = vim.api.nvim_buf_get_name(file)
+	local lines = vim.bo[file].buftype == "" and path ~= "" and index_lines(path)
+	if not lines then
+		return vim.notify("Not a file in a git repo", vim.log.levels.WARN)
+	end
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	vim.bo[buf].modifiable = false
+	vim.bo[buf].bufhidden = "wipe"
+	vim.bo[buf].filetype = vim.bo[file].filetype
+	vim.b[buf].commits_index = true
+	left = vim.api.nvim_open_win(buf, false, { split = "left", win = right })
+	vim.wo[left].winbar = "%#Identifier#index%* " .. vim.fn.fnamemodify(path, ":~:.")
+	local saved = {}
+	for _, name in ipairs({ "winhighlight", "fillchars" }) do
+		saved[name] = vim.api.nvim_get_option_value(name, { win = right })
+	end
+	M.style(left, right)
+	for _, win in ipairs({ left, right }) do
+		vim.api.nvim_win_call(win, function()
+			vim.cmd("diffthis")
+		end)
+	end
+	-- However the left side closes, turn diff mode off on the right and put
+	-- its colors back.
+	vim.api.nvim_create_autocmd("WinClosed", {
+		group = group,
+		pattern = tostring(left),
+		once = true,
+		callback = function()
+			if not vim.api.nvim_win_is_valid(right) then
+				return
+			end
+			vim.api.nvim_win_call(right, function()
+				vim.cmd("diffoff")
+			end)
+			for name, value in pairs(saved) do
+				vim.api.nvim_set_option_value(name, value, { scope = "local", win = right })
+			end
+		end,
+	})
 end
 
 return M

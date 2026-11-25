@@ -46,6 +46,12 @@ vim.keymap.set("x", "<leader>gh", commits.lines) -- or these lines
 vim.keymap.set("n", "<leader>gm", commits.branch) -- this branch's commits, oldest first
 ```
 
+`require("commits.diffsplit").toggle()` shows the current buffer's uncommitted changes the same way as the browser's split diff, with the index on the left:
+
+```lua
+vim.keymap.set("n", "<leader>gD", require("commits.diffsplit").toggle)
+```
+
 See `:help commits` for the keys in the browser, the options and the colors.
 
 ## License
