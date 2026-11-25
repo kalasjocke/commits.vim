@@ -1,22 +1,9 @@
 -- Go through git commits with a diff of each changed file.
 --
 -- A new tab shows the list of commits at the bottom and the diff above it.
--- In the list and in the diff:
---
---   <CR> o  on a commit: show or hide its files. On a file: open its diff.
---   ]c [c   next or previous commit, at its first file
---   ]f [f   next or previous file of the commit, wrapping around
---   ]h [h   next or previous hunk in the diff
---   M       the full commit message, in the middle of the screen
---   O       the commit on GitHub, at the file when on one
---   P       the commit's pull request on GitHub
---   <leader>gd  the unified diff, set with setup({ keys = { unified = ... } })
---   <leader>gD  the split diff, set with setup({ keys = { split = ... } })
---   q       close the tab
---
--- And in the list only:
---
---   y       copy the commit's short hash, or hash:path on a file
+-- Its keys call the functions further down, like M.next_commit. setup()'s
+-- on_attach sets them in each buffer the browser shows, or default_keys does,
+-- with the keys in :help commits-keys.
 --
 -- The unified diff shows the file as of the commit, as commits.unified() shows a
 -- buffer's changes: added and changed lines highlighted, removed lines shown
@@ -41,11 +28,10 @@ local unified = require("commits.unified")
 M.config = {
 	-- The diff a browser starts with: "unified" or "split".
 	diff = "unified",
-	-- The keys that switch the diff in the browser. false leaves one unset.
-	keys = {
-		unified = "<leader>gd",
-		split = "<leader>gD",
-	},
+	-- A function that sets the browser's keys in a buffer, called as
+	-- on_attach(buf, kind) for each buffer the browser shows. kind is "list"
+	-- or "diff". Without it the browser gets the keys in :help commits-keys.
+	on_attach = nil,
 }
 
 function M.setup(opts)
@@ -363,10 +349,6 @@ local function checkout(state, hash)
 	return true
 end
 
--- The keys of the list and the diff, besides <CR> and o in the list. Set
--- further down, as they call functions defined there.
-local keys, map, bindings
-
 -- The browser each of its buffers belongs to: the list, the split's left side
 -- and the file the diff window shows.
 local showing = {}
@@ -374,6 +356,59 @@ local showing = {}
 -- The browser the current buffer belongs to, if any.
 local function current()
 	return showing[vim.api.nvim_get_current_buf()]
+end
+
+-- The keys a browser gets without an on_attach in setup().
+local function default_keys(buf, kind)
+	local function map(lhs, fn)
+		vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true })
+	end
+	map("]c", M.next_commit)
+	map("[c", M.prev_commit)
+	map("]f", M.next_file)
+	map("[f", M.prev_file)
+	map("]h", M.next_hunk)
+	map("[h", M.prev_hunk)
+	map("M", M.message)
+	map("O", M.browse)
+	map("P", M.pull_request)
+	map("q", M.close)
+	map("<leader>gd", M.unified)
+	map("<leader>gD", M.split)
+	if kind == "list" then
+		map("<CR>", M.select)
+		map("o", M.select)
+		map("y", M.copy)
+	end
+end
+
+-- The keys on_attach set in each buffer, so they come off a file the diff
+-- moves on from. They're the mappings that on_attach added or changed.
+local attached = {}
+local modes = { "n", "v", "x", "s", "o", "i", "c", "t" }
+
+local function mappings(buf)
+	local found = {}
+	for _, mode in ipairs(modes) do
+		for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, mode)) do
+			found[mode .. " " .. m.lhs] = { mode = mode, lhs = m.lhs, to = m.callback or m.rhs }
+		end
+	end
+	return found
+end
+
+-- Let on_attach set the keys of a buffer the browser shows. kind is "list" for
+-- the list of commits and "diff" for the diff's windows.
+local function attach(buf, kind)
+	local before = mappings(buf)
+	local on_attach = M.config.on_attach or default_keys
+	on_attach(buf, kind)
+	attached[buf] = attached[buf] or {}
+	for key, m in pairs(mappings(buf)) do
+		if not before[key] or before[key].to ~= m.to then
+			attached[buf][key] = m
+		end
+	end
 end
 
 -- Take the diff off a buffer the diff window no longer shows, and close it
@@ -384,9 +419,10 @@ local function release(buf)
 	end
 	showing[buf] = nil
 	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-	for lhs in pairs(bindings()) do
-		pcall(vim.keymap.del, "n", lhs, { buffer = buf })
+	for _, m in pairs(attached[buf] or {}) do
+		pcall(vim.keymap.del, m.mode, m.lhs, { buffer = buf })
 	end
+	attached[buf] = nil
 	if #vim.fn.win_findbuf(buf) == 0 then
 		pcall(vim.api.nvim_buf_delete, buf, {})
 	end
@@ -428,7 +464,7 @@ local function open_file(state, hash, path, lines)
 	end
 	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 	showing[buf] = state
-	map(state, buf)
+	attach(buf, "diff")
 	vim.wo[state.diff_win].winbar = path and ("%#Identifier#" .. hash:sub(1, 7) .. "%* " .. path) or ""
 	return buf
 end
@@ -444,7 +480,7 @@ vim.api.nvim_create_autocmd("User", {
 	callback = function(args)
 		local buf = args.data and args.data.buffer
 		if buf and showing[buf] then
-			map(showing[buf], buf)
+			attach(buf, "diff")
 		end
 	end,
 })
@@ -501,7 +537,7 @@ local function show_split(state, commit, path, old)
 		state.old_buf = scratch()
 		state.old_win = vim.api.nvim_open_win(state.old_buf, false, { split = "left", win = state.diff_win })
 		showing[state.old_buf] = state
-		map(state, state.old_buf)
+		attach(state.old_buf, "diff")
 		-- Closing it with :q closes the tab, as for the other two windows.
 		state.old_closed = vim.api.nvim_create_autocmd("WinClosed", {
 			pattern = tostring(state.old_win),
@@ -646,8 +682,8 @@ local function target(state)
 end
 
 -- Show the full commit message in the middle of the editor, over the browser's
--- windows. It takes the focus, so a long message can scroll. q, <Esc> or M
--- closes it, and so does going to another window.
+-- windows. It takes the focus, so a long message can scroll. q or <Esc> closes
+-- it, and so does going to another window.
 local function show_message(state)
 	local commit = target(state)
 	local message = git(state.root, { "show", "-s", "--format=%h %an, %ad%n%n%B", commit.hash }) or ""
@@ -681,7 +717,7 @@ local function show_message(state)
 	local function close()
 		pcall(vim.api.nvim_win_close, win, true)
 	end
-	for _, lhs in ipairs({ "q", "<Esc>", "M" }) do
+	for _, lhs in ipairs({ "q", "<Esc>" }) do
 		vim.keymap.set("n", lhs, close, { buffer = buf, nowait = true })
 	end
 	vim.api.nvim_create_autocmd("WinLeave", { buffer = buf, once = true, callback = vim.schedule_wrap(close) })
@@ -833,48 +869,6 @@ local function switch_split(state)
 	if not state.split then
 		state.split = true
 		show(state, state.current.commit, state.current.file)
-	end
-end
-
-keys = {
-	["]c"] = M.next_commit,
-	["[c"] = M.prev_commit,
-	["]f"] = M.next_file,
-	["[f"] = M.prev_file,
-	["]h"] = M.next_hunk,
-	["[h"] = M.prev_hunk,
-	M = M.message,
-	O = M.browse,
-	P = M.pull_request,
-	q = M.close,
-}
-
--- The keys that switch the diff, under their names in config.keys. M.unified
--- and M.split switch the diff in a browser.
-local switches = {
-	unified = function()
-		M.unified()
-	end,
-	split = function()
-		M.split()
-	end,
-}
-
--- The keys above with the switches at the keys config gives them.
-function bindings()
-	local all = vim.deepcopy(keys)
-	for name, fn in pairs(switches) do
-		local lhs = M.config.keys[name]
-		if lhs then
-			all[lhs] = fn
-		end
-	end
-	return all
-end
-
-function map(_, buf)
-	for lhs, fn in pairs(bindings()) do
-		vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true })
 	end
 end
 
@@ -1047,11 +1041,7 @@ function M.open(args, opts)
 		vim.wo[state.list_win][option] = value
 	end
 	showing[state.list_buf] = state
-	map(state, state.list_buf)
-	for _, lhs in ipairs({ "<CR>", "o" }) do
-		vim.keymap.set("n", lhs, M.select, { buffer = state.list_buf })
-	end
-	vim.keymap.set("n", "y", M.copy, { buffer = state.list_buf, nowait = true })
+	attach(state.list_buf, "list")
 	-- Closing the list or the diff some other way than q, like :q, closes the
 	-- tab too.
 	for _, win in ipairs({ state.list_win, state.diff_win }) do

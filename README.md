@@ -8,7 +8,7 @@ A browser opens in a new tab with the list of commits at the bottom and a diff a
 
 - Neovim 0.11 or later.
 - git.
-- The GitHub CLI, `gh`, for `P`, which opens a commit's pull request. Optional.
+- The GitHub CLI, `gh`, for `commits.pull_request()`, which opens a commit's pull request. Optional.
 
 Run `:checkhealth commits` to check them.
 
@@ -49,7 +49,18 @@ vim.keymap.set("n", "<leader>gD", commits.split) -- or as a split diff
 
 `commits.unified` and `commits.split` show the current buffer's uncommitted changes the same way as the browser's diffs, compared with the index. Pressing the key again hides them.
 
-See `:help commits` for the keys in the browser, the options and the colors.
+In the browser, `]c` and `[c` move by commit, `]f` and `[f` by file, `]h` and `[h` by hunk, and `M` shows the commit message. Each key calls a function, like `commits.next_commit`, so you can set your own with `on_attach`, as gitsigns does:
+
+```lua
+commits.setup({
+  on_attach = function(buf, kind) -- kind is "list" or "diff"
+    vim.keymap.set("n", "M", commits.message, { buffer = buf })
+    -- ...
+  end,
+})
+```
+
+See `:help commits` for all the keys and functions, the options and the colors.
 
 ## License
 

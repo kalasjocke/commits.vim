@@ -43,25 +43,35 @@ require("commits").open({args}, {opts})                      *commits.open()*
 ==============================================================================
 2. Keys                                                        *commits-keys*
 
-In the list and in the diff:
+Each key calls a function on the module. Without an `on_attach` in
+|commits-setup|, the list and the diff get these keys:
 
-  <CR> o      On a commit, show or hide its files. On a file, open its diff.
-  ]c [c       Next or previous commit, at its first file.
-  ]f [f       Next or previous file of the commit, wrapping around.
-  ]h [h       Next or previous hunk in the diff.
-  M           The full commit message, in the middle of the screen. q, <Esc>
-              or M closes it.
-  O           The commit on the origin remote's web host, at the file's diff
-              when on a file.
-  P           The commit's pull request on GitHub. Needs the GitHub CLI, gh.
-  <leader>gd  The unified diff. Set it with `keys.unified`.
-  <leader>gD  The split diff. Set it with `keys.split`.
-  q           Close the tab. Closing the list or a diff window with :q
-              closes it too.
+  Key         Function                Action ~
+  <CR> o      commits.select()        On a commit in the list, show or hide
+                                      its files. On a file, open its diff.
+  ]c [c       commits.next_commit()   Next or previous commit, at its first
+              commits.prev_commit()   file.
+  ]f [f       commits.next_file()     Next or previous file of the commit,
+              commits.prev_file()     wrapping around.
+  ]h [h       commits.next_hunk()     Next or previous hunk in the diff.
+              commits.prev_hunk()
+  M           commits.message()       The full commit message, in the middle
+                                      of the screen. q or <Esc> closes it.
+  O           commits.browse()        The commit on the origin remote's web
+                                      host, at the file's diff when on a file.
+  P           commits.pull_request()  The commit's pull request on GitHub.
+                                      Needs the GitHub CLI, gh.
+  <leader>gd  commits.unified()       Switch to the unified diff.
+  <leader>gD  commits.split()         Switch to the split diff.
+  y           commits.copy()          Copy the commit's short hash, or
+                                      hash:path on a file.
+  q           commits.close()         Close the tab. Closing the list or a
+                                      diff window with :q closes it too.
 
-In the list only:
-
-  y           Copy the commit's short hash, or hash:path on a file.
+<CR>, o and y are in the list only. Each function acts on the browser the
+current buffer belongs to, and does nothing outside one. commits.unified() and
+commits.split() show a buffer's own changes outside a browser, see
+|commits-unified|, so one global key can do both.
 
 The unified diff shows the file as of the commit: added and changed lines
 highlighted, removed lines shown above them, and unchanged lines folded. The
@@ -79,11 +89,30 @@ setup() is optional. These are the defaults: >lua
     require("commits").setup({
       -- The diff a browser starts with: "unified" or "split".
       diff = "unified",
-      -- The keys that switch the diff. false leaves one unset.
-      keys = {
-        unified = "<leader>gd",
-        split = "<leader>gD",
-      },
+      -- Sets the browser's keys, see below.
+      on_attach = nil,
+    })
+<
+                                                          *commits-on_attach*
+on_attach({buf}, {kind}) sets the browser's keys, as gitsigns' on_attach
+does. The browser calls it for each buffer it shows: the list, with {kind}
+"list", and each file the diff shows, with {kind} "diff". Set buffer-local
+keys in it. The diff's files are real files, so the browser takes the keys
+on_attach set off a file when the diff moves on from it. Without on_attach
+the browser gets the keys in |commits-keys|. For example: >lua
+
+    local commits = require("commits")
+    commits.setup({
+      on_attach = function(buf, kind)
+        local opts = { buffer = buf, nowait = true }
+        vim.keymap.set("n", "]c", commits.next_commit, opts)
+        vim.keymap.set("n", "[c", commits.prev_commit, opts)
+        vim.keymap.set("n", "M", commits.message, opts)
+        vim.keymap.set("n", "q", commits.close, opts)
+        if kind == "list" then
+          vim.keymap.set("n", "<CR>", commits.select, opts)
+        end
+      end,
     })
 <
 Map the functions in |commits-usage| to open the browser, for example: >lua
