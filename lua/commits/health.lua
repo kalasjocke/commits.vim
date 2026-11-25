@@ -19,11 +19,6 @@ function M.check()
 	else
 		vim.health.warn("gh is not installed, so P can't find a commit's pull request")
 	end
-	if #vim.api.nvim_get_runtime_file("lua/gitsigns.lua", false) > 0 then
-		vim.health.ok("gitsigns is installed, for the unified diff's colors")
-	else
-		vim.health.info("gitsigns is not installed, so the unified diff uses the diff mode colors")
-	end
 end
 
 return M

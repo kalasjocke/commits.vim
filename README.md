@@ -9,7 +9,6 @@ A browser opens in a new tab with the list of commits at the bottom and a diff a
 - Neovim 0.11 or later.
 - git.
 - The GitHub CLI, `gh`, for `P`, which opens a commit's pull request. Optional.
-- [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim) for the unified diff's colors. Optional. Without it the diff uses the diff mode colors.
 
 Run `:checkhealth commits` to check them.
 

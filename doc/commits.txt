@@ -115,10 +115,9 @@ Each group is a default, so a color scheme or your config can set it.
   CommitsRemoved     Removed line counts and the D status.
   CommitsChanged     The M status.
   CommitsSelected    The selected file in the list. Links to Visual.
-  CommitsAddLine     Added lines in the unified diff. Links to GitSignsAddLn
-                     when gitsigns is installed, and DiffAdd when it isn't.
-  CommitsChangeLine  Changed lines. GitSignsChangeLn or DiffChange.
-  CommitsDeleteLine  Removed lines. GitSignsDeleteVirtLn or DiffDelete.
+  CommitsAddLine     Added lines in the unified diff. Links to DiffAdd.
+  CommitsChangeLine  Changed lines. Links to DiffChange.
+  CommitsDeleteLine  Removed lines. Links to DiffDelete.
 
 The split diff colors its sides with CommitsSplitAdd, CommitsSplitAddText,
 CommitsSplitRemove and CommitsSplitRemoveText. They're mixed from the theme's

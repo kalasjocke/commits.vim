@@ -18,7 +18,7 @@
 --
 --   y       copy the commit's short hash, or hash:path on a file
 --
--- The unified diff shows the file as of the commit, as gitsigns shows a
+-- The unified diff shows the file as of the commit, as commits.unified() shows a
 -- buffer's changes: added and changed lines highlighted, removed lines shown
 -- above them, and unchanged lines folded. The split diff shows it as GitHub
 -- does, with the file before the commit on the left, in Neovim's diff mode.
@@ -57,24 +57,16 @@ local ns = vim.api.nvim_create_namespace("commits")
 local group = vim.api.nvim_create_augroup("commits", { clear = true })
 
 -- Color the counts and statuses with the text color of the diff groups. Some
--- themes give those groups a background too, which this leaves out.
--- The unified diff's lines get gitsigns' colors when it's installed, and the
--- diff mode colors when it isn't. This looks for gitsigns' files, not its
--- colors, which it may not have set yet.
+-- themes give those groups a background too, which this leaves out. The
+-- unified diff's lines get the diff mode colors.
 local function set_highlights()
 	for name, from in pairs({ CommitsAdded = "Added", CommitsRemoved = "Removed", CommitsChanged = "Changed" }) do
 		vim.api.nvim_set_hl(0, name, { fg = vim.api.nvim_get_hl(0, { name = from, link = false }).fg, default = true })
 	end
 	vim.api.nvim_set_hl(0, "CommitsSelected", { link = "Visual", default = true })
-	local gitsigns = #vim.api.nvim_get_runtime_file("lua/gitsigns.lua", false) > 0
-	local lines = {
-		CommitsAddLine = gitsigns and "GitSignsAddLn" or "DiffAdd",
-		CommitsChangeLine = gitsigns and "GitSignsChangeLn" or "DiffChange",
-		CommitsDeleteLine = gitsigns and "GitSignsDeleteVirtLn" or "DiffDelete",
-	}
-	for name, link in pairs(lines) do
-		vim.api.nvim_set_hl(0, name, { link = link, default = true })
-	end
+	vim.api.nvim_set_hl(0, "CommitsAddLine", { link = "DiffAdd", default = true })
+	vim.api.nvim_set_hl(0, "CommitsChangeLine", { link = "DiffChange", default = true })
+	vim.api.nvim_set_hl(0, "CommitsDeleteLine", { link = "DiffDelete", default = true })
 end
 set_highlights()
 vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_highlights })
