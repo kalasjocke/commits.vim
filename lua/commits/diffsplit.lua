@@ -8,6 +8,8 @@
 
 local M = {}
 
+local group = vim.api.nvim_create_augroup("commits.diffsplit", { clear = true })
+
 -- Blend color a into color b by amount, from 0 to 1.
 local function mix(a, b, amount)
 	local out = 0
@@ -32,7 +34,7 @@ local function set_highlights()
 	vim.api.nvim_set_hl(0, "CommitsSplitRemoveText", { bg = mix(remove, bg, 0.35) })
 end
 set_highlights()
-vim.api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
+vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_highlights })
 
 -- Diff mode's colors on each side. DiffDelete is the empty row across from a
 -- line the other side has.

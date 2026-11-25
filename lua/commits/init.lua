@@ -51,6 +51,9 @@ function M.setup(opts)
 end
 
 local ns = vim.api.nvim_create_namespace("commits")
+-- Loading the module again replaces its autocmds instead of adding more.
+local group = vim.api.nvim_create_augroup("commits", { clear = true })
+
 -- Color the counts and statuses with the text color of the diff groups. Some
 -- themes give those groups a background too, which this leaves out.
 -- The unified diff's lines get gitsigns' colors when it's installed, and the
@@ -72,7 +75,7 @@ local function set_highlights()
 	end
 end
 set_highlights()
-vim.api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
+vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_highlights })
 
 -- One header line per commit, then the --raw and --numstat lines of its files.
 -- %x1e starts a commit and %x1f separates its fields.
@@ -271,6 +274,7 @@ end
 -- otherwise warn about the missing file and then wait a second.
 local view_files = "*/commits-view/*"
 vim.api.nvim_create_autocmd("BufReadPost", {
+	group = group,
 	pattern = view_files,
 	callback = function(args)
 		vim.bo[args.buf].readonly = true
@@ -278,6 +282,7 @@ vim.api.nvim_create_autocmd("BufReadPost", {
 	end,
 })
 vim.api.nvim_create_autocmd("FileChangedShell", {
+	group = group,
 	pattern = view_files,
 	callback = function(args)
 		if vim.v.fcs_reason ~= "deleted" then
@@ -434,6 +439,7 @@ end
 -- back after each gitsigns update, which comes after its on_attach. Gitsigns
 -- stays attached and shows no signs, as the view has nothing to show.
 vim.api.nvim_create_autocmd("User", {
+	group = group,
 	pattern = "GitSignsUpdate",
 	callback = function(args)
 		local buf = args.data and args.data.buffer
