@@ -7,7 +7,7 @@
 --   ]c [c   next or previous commit, at its first file
 --   ]f [f   next or previous file of the commit, wrapping around
 --   ]h [h   next or previous hunk in the diff
---   K       the full commit message
+--   K       the full commit message, in the middle of the screen
 --   O       the commit on GitHub, at the file when on one
 --   P       the commit's pull request on GitHub
 --   <leader>gd  the unified diff, set with setup({ keys = { unified = ... } })
@@ -635,10 +635,46 @@ local function target(state)
 	return commit, commit.files[at.file]
 end
 
+-- Show the full commit message in the middle of the editor, over the browser's
+-- windows. It takes the focus, so a long message can scroll. q, <Esc> or K
+-- closes it, and so does going to another window.
 local function show_message(state)
 	local commit = target(state)
 	local message = git(state.root, { "show", "-s", "--format=%h %an, %ad%n%n%B", commit.hash }) or ""
-	vim.lsp.util.open_floating_preview(vim.split(vim.trim(message), "\n"), "gitcommit", { focus_id = "commits" })
+	local lines = vim.split(vim.trim(message), "\n")
+	local width = 0
+	for _, line in ipairs(lines) do
+		width = math.max(width, vim.fn.strdisplaywidth(line))
+	end
+	local buf = scratch()
+	vim.bo[buf].modifiable = true
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	vim.bo[buf].modifiable = false
+	vim.bo[buf].filetype = "gitcommit"
+	local config = {
+		relative = "editor",
+		width = math.min(width, 80, vim.o.columns - 8),
+		height = 1,
+		row = 0,
+		col = 0,
+		style = "minimal",
+		border = vim.o.winborder ~= "" and vim.o.winborder or "rounded",
+	}
+	local win = vim.api.nvim_open_win(buf, true, config)
+	vim.wo[win].wrap = true
+	vim.wo[win].linebreak = true
+	-- Size it to the message once its lines wrap at the window's width.
+	config.height = math.min(vim.api.nvim_win_text_height(win, {}).all, vim.o.lines - 6)
+	config.row = math.floor((vim.o.lines - config.height) / 2) - 1
+	config.col = math.floor((vim.o.columns - config.width) / 2)
+	vim.api.nvim_win_set_config(win, config)
+	local function close()
+		pcall(vim.api.nvim_win_close, win, true)
+	end
+	for _, lhs in ipairs({ "q", "<Esc>", "K" }) do
+		vim.keymap.set("n", lhs, close, { buffer = buf, nowait = true })
+	end
+	vim.api.nvim_create_autocmd("WinLeave", { buffer = buf, once = true, callback = vim.schedule_wrap(close) })
 end
 
 -- The commit's page on the web host of the origin remote. On a file, or in the
