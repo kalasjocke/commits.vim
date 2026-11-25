@@ -36,6 +36,8 @@
 
 local M = {}
 
+local unified = require("commits.unified")
+
 M.config = {
 	-- The diff a browser starts with: "unified" or "split".
 	diff = "unified",
@@ -456,44 +458,15 @@ local context = 6
 -- Returns the line each hunk starts at, with the number of removed lines drawn
 -- above it. The split diff only needs the hunks, as diff mode draws the rest.
 local function show_diff(state, buf, old)
-	local new = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-	if #new == 1 and new[1] == "" then
-		new = {}
+	local new = unified.lines(buf)
+	local diff = unified.diff(old, new)
+	if not state.split then
+		unified.draw(buf, ns, old, diff)
 	end
 	local hunks, keep = {}, {}
-	local tab = string.rep(" ", vim.bo[buf].tabstop)
-	local width = vim.o.columns
-	-- An empty file is an empty string, not one empty line, or an added file's
-	-- blank lines would match it and split its one hunk.
-	local function text(lines)
-		return #lines > 0 and table.concat(lines, "\n") .. "\n" or ""
-	end
-	local diff = vim.text.diff(text(old), text(new), { result_type = "indices", algorithm = "histogram" })
 	for _, hunk in ipairs(diff) do
-		local old_start, old_count, new_start, new_count = unpack(hunk)
-		local line_hl = old_count == 0 and "CommitsAddLine" or "CommitsChangeLine"
-		for line = new_start, new_start + new_count - 1 do
-			if not state.split then
-				vim.api.nvim_buf_set_extmark(buf, ns, line - 1, 0, { line_hl_group = line_hl })
-			end
-		end
-		-- Removed lines go above the new ones, or below the line before them
-		-- when nothing replaced them.
-		local virt_lines = {}
-		for line = old_start, old_start + old_count - 1 do
-			local removed = old[line]:gsub("\t", tab)
-			table.insert(
-				virt_lines,
-				{ { removed .. string.rep(" ", width - vim.fn.strdisplaywidth(removed)), "CommitsDeleteLine" } }
-			)
-		end
-		-- A deleted file has one empty line, and its hunk starts at 0, so its
-		-- removed lines go above that line.
-		local above = new_count > 0 or new_start == 0
-		local anchor = math.max(new_start, 1)
-		if #virt_lines > 0 and not state.split then
-			vim.api.nvim_buf_set_extmark(buf, ns, anchor - 1, 0, { virt_lines = virt_lines, virt_lines_above = above })
-		end
+		local _, old_count, new_start, new_count = unpack(hunk)
+		local anchor, above = unified.anchor(hunk)
 		table.insert(hunks, { line = anchor, above = above and old_count or 0 })
 		local last = new_count > 0 and new_start + new_count - 1 or anchor
 		for line = anchor - context, last + context do
