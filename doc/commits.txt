@@ -49,8 +49,8 @@ In the list and in the diff:
   ]c [c       Next or previous commit, at its first file.
   ]f [f       Next or previous file of the commit, wrapping around.
   ]h [h       Next or previous hunk in the diff.
-  K           The full commit message, in the middle of the screen. q, <Esc>
-              or K closes it.
+  M           The full commit message, in the middle of the screen. q, <Esc>
+              or M closes it.
   O           The commit on the origin remote's web host, at the file's diff
               when on a file.
   P           The commit's pull request on GitHub. Needs the GitHub CLI, gh.

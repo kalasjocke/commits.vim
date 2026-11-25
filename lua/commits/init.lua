@@ -7,7 +7,7 @@
 --   ]c [c   next or previous commit, at its first file
 --   ]f [f   next or previous file of the commit, wrapping around
 --   ]h [h   next or previous hunk in the diff
---   K       the full commit message, in the middle of the screen
+--   M       the full commit message, in the middle of the screen
 --   O       the commit on GitHub, at the file when on one
 --   P       the commit's pull request on GitHub
 --   <leader>gd  the unified diff, set with setup({ keys = { unified = ... } })
@@ -636,7 +636,7 @@ local function target(state)
 end
 
 -- Show the full commit message in the middle of the editor, over the browser's
--- windows. It takes the focus, so a long message can scroll. q, <Esc> or K
+-- windows. It takes the focus, so a long message can scroll. q, <Esc> or M
 -- closes it, and so does going to another window.
 local function show_message(state)
 	local commit = target(state)
@@ -671,7 +671,7 @@ local function show_message(state)
 	local function close()
 		pcall(vim.api.nvim_win_close, win, true)
 	end
-	for _, lhs in ipairs({ "q", "<Esc>", "K" }) do
+	for _, lhs in ipairs({ "q", "<Esc>", "M" }) do
 		vim.keymap.set("n", lhs, close, { buffer = buf, nowait = true })
 	end
 	vim.api.nvim_create_autocmd("WinLeave", { buffer = buf, once = true, callback = vim.schedule_wrap(close) })
@@ -771,7 +771,7 @@ keys = {
 	["[h"] = function(state)
 		step_hunk(state, -1)
 	end,
-	K = show_message,
+	M = show_message,
 	O = open_remote,
 	P = open_pull_request,
 	q = function()
