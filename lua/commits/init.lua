@@ -1051,4 +1051,10 @@ function M.lines()
 	M.open({ "-L", range, "-s" }, { root = root, path = path })
 end
 
+-- The current buffer's uncommitted changes as a split diff, with the index on
+-- the left. Again closes it.
+function M.split()
+	require("commits.diffsplit").toggle()
+end
+
 return M

@@ -6,8 +6,9 @@
 -- Diff mode colors a line that only one side has the same on both sides, so
 -- each window maps the diff colors to its own.
 --
--- The commit browser's split diff uses style(). toggle() shows the current
--- buffer's changes the same way, with the index on the left.
+-- The commit browser's split diff uses style(). toggle(), which is
+-- commits.split(), shows the current buffer's changes the same way, with the
+-- index on the left.
 
 local M = {}
 
