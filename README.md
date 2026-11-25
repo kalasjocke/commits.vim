@@ -1,8 +1,26 @@
 # commits.vim
 
-Go through git commits in Neovim with a diff of each changed file.
+A Neovim plugin to read code changes faster, one commit at a time.
 
-A browser opens in a new tab with the list of commits at the bottom and a diff above it. Move by commit with `]c` and `[c`, by file with `]f` and `[f`, and by hunk with `]h` and `[h`. The diff is unified, with removed lines shown above the new ones, or split, with the old file on the left. The file is the real one, checked out in a worktree of the repo, so language servers work in it.
+The plugin opens a tab with a list of commits at the bottom, one per line, with each commit's hash, subject, author and date, and the number of files and lines it changed. A commit opens to show its files, each with its status and line counts. The list reloads when a ref changes, like after a commit, a rebase or a fetch.
+
+Above the list is the diff of the selected file. It's unified, with removed lines shown above the new ones, or split, with the old file on the left. The file is the real one, checked out in a worktree of the repo, so language servers work in it.
+
+In the browser:
+
+| Key          | Action                                               |
+| ------------ | ---------------------------------------------------- |
+| `]c` `[c`    | Next or previous commit                              |
+| `]f` `[f`    | Next or previous file of the commit                  |
+| `]h` `[h`    | Next or previous hunk in the diff                    |
+| `<CR>` `o`   | Show or hide a commit's files, or open a file's diff |
+| `M`          | The full commit message                              |
+| `O`          | The commit on its web host, like GitHub              |
+| `P`          | The commit's pull request                            |
+| `y`          | Copy the commit's hash, or hash:path on a file       |
+| `<leader>gd` | Switch to the unified diff                           |
+| `<leader>gD` | Switch to the split diff                             |
+| `q`          | Close the browser                                    |
 
 ## Requirements
 
@@ -47,14 +65,13 @@ vim.keymap.set("n", "<leader>gd", commits.unified) -- this buffer's changes as a
 vim.keymap.set("n", "<leader>gD", commits.split) -- or as a split diff
 ```
 
-`commits.unified` and `commits.split` show the current buffer's uncommitted changes the same way as the browser's diffs, compared with the index. Pressing the key again hides them.
-
-In the browser, `]c` and `[c` move by commit, `]f` and `[f` by file, `]h` and `[h` by hunk, and `M` shows the commit message. Each key calls a function, like `commits.next_commit`, so you can set your own with `on_attach`, as gitsigns does:
+Each of the browser's keys calls a function, like `commits.next_commit`, so you can set your mapping with `on_attach`:
 
 ```lua
 commits.setup({
   on_attach = function(buf, kind) -- kind is "list" or "diff"
-    vim.keymap.set("n", "M", commits.message, { buffer = buf })
+    local opts = { buffer = buf, nowait = true }
+    vim.keymap.set("n", "M", commits.message, opts)
     -- ...
   end,
 })

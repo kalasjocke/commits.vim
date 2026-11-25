@@ -1,4 +1,4 @@
-*commits.txt*  Go through git commits with a diff of each changed file
+*commits.txt*  Read code changes faster, one commit at a time
 
 ==============================================================================
 CONTENTS                                                      *commits*
@@ -14,7 +14,9 @@ CONTENTS                                                      *commits*
 1. Usage                                                      *commits-usage*
 
 A browser opens in a new tab, with the list of commits at the bottom and the
-diff of a file above it.
+diff of a file above it. Each commit in the list shows its hash, subject,
+author and date, and the number of files and lines it changed. A commit opens
+to show its files, each with its status and line counts.
 
 :Commits [args]                                               *:Commits*
     Open the commits that `git log [args]` lists, like
@@ -104,12 +106,12 @@ setup() is optional. These are the defaults: >lua
     })
 <
                                                           *commits-on_attach*
-on_attach({buf}, {kind}) sets the browser's keys, as gitsigns' on_attach
-does. The browser calls it for each buffer it shows: the list, with {kind}
-"list", and each file the diff shows, with {kind} "diff". Set buffer-local
-keys in it. The diff's files are real files, so the browser takes the keys
-on_attach set off a file when the diff moves on from it. Without on_attach
-the browser gets the keys in |commits-keys|. For example: >lua
+on_attach({buf}, {kind}) sets the browser's keys. The browser calls it for
+each buffer it shows: the list, with {kind} "list", and each file the diff
+shows, with {kind} "diff". Set buffer-local keys in it. The diff's files are
+real files, so the browser takes the keys on_attach set off a file when the
+diff moves on from it. Without on_attach the browser gets the keys in
+|commits-keys|. For example: >lua
 
     local commits = require("commits")
     commits.setup({
