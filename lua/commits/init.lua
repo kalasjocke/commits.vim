@@ -48,14 +48,23 @@ end
 local ns = vim.api.nvim_create_namespace("commits")
 -- Color the counts and statuses with the text color of the diff groups. Some
 -- themes give those groups a background too, which this leaves out.
+-- The unified diff's lines get gitsigns' colors when it's installed, and the
+-- diff mode colors when it isn't. This looks for gitsigns' files, not its
+-- colors, which it may not have set yet.
 local function set_highlights()
 	for name, from in pairs({ CommitsAdded = "Added", CommitsRemoved = "Removed", CommitsChanged = "Changed" }) do
 		vim.api.nvim_set_hl(0, name, { fg = vim.api.nvim_get_hl(0, { name = from, link = false }).fg, default = true })
 	end
 	vim.api.nvim_set_hl(0, "CommitsSelected", { link = "Visual", default = true })
-	vim.api.nvim_set_hl(0, "CommitsAddLine", { link = "GitSignsAddLn", default = true })
-	vim.api.nvim_set_hl(0, "CommitsChangeLine", { link = "GitSignsChangeLn", default = true })
-	vim.api.nvim_set_hl(0, "CommitsDeleteLine", { link = "GitSignsDeleteVirtLn", default = true })
+	local gitsigns = #vim.api.nvim_get_runtime_file("lua/gitsigns.lua", false) > 0
+	local lines = {
+		CommitsAddLine = gitsigns and "GitSignsAddLn" or "DiffAdd",
+		CommitsChangeLine = gitsigns and "GitSignsChangeLn" or "DiffChange",
+		CommitsDeleteLine = gitsigns and "GitSignsDeleteVirtLn" or "DiffDelete",
+	}
+	for name, link in pairs(lines) do
+		vim.api.nvim_set_hl(0, name, { link = link, default = true })
+	end
 end
 set_highlights()
 vim.api.nvim_create_autocmd("ColorScheme", { callback = set_highlights })
