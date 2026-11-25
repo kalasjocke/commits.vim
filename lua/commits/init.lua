@@ -531,7 +531,7 @@ local function show_split(state, commit, path, old)
 	vim.wo[state.old_win].winbar = (path and parent) and ("%#Identifier#" .. parent .. "%* " .. path) or ""
 	-- A window keeps its options for each buffer it shows, so style the diff
 	-- window again for the file it now shows.
-	require("diffsplit").style(state.old_win, state.diff_win)
+	require("commits.diffsplit").style(state.old_win, state.diff_win)
 	for _, win in ipairs({ state.old_win, state.diff_win }) do
 		vim.api.nvim_win_call(win, function()
 			vim.cmd("diffthis")
