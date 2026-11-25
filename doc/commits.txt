@@ -1,0 +1,126 @@
+*commits.txt*  Go through git commits with a diff of each changed file
+
+==============================================================================
+CONTENTS                                                      *commits*
+
+  1. Usage ............................................... |commits-usage|
+  2. Keys ................................................. |commits-keys|
+  3. Setup ............................................... |commits-setup|
+  4. The view worktree .................................... |commits-view|
+  5. Colors ............................................. |commits-colors|
+
+==============================================================================
+1. Usage                                                      *commits-usage*
+
+A browser opens in a new tab, with the list of commits at the bottom and the
+diff of a file above it.
+
+:Commits [args]                                               *:Commits*
+    Open the commits that `git log [args]` lists, like
+    `:Commits main..HEAD --author=Joakim`.
+
+The plugin sets no global keys. These functions open common lists:
+
+require("commits").log()                                      *commits.log()*
+    The last 100 commits.
+
+require("commits").branch()                                *commits.branch()*
+    The commits on this branch that origin's default branch doesn't have,
+    oldest first.
+
+require("commits").file()                                    *commits.file()*
+    The commits that changed the current file.
+
+require("commits").lines()                                  *commits.lines()*
+    The commits that changed the selected lines. Map it in visual mode.
+
+require("commits").open({args}, {opts})                      *commits.open()*
+    The commits that `git log {args}` lists. {opts}.root is the repo, the
+    current file's by default. {opts}.path, when set, is the only file each
+    commit shows, for `git log -L`.
+
+==============================================================================
+2. Keys                                                        *commits-keys*
+
+In the list and in the diff:
+
+  <CR> o      On a commit, show or hide its files. On a file, open its diff.
+  ]c [c       Next or previous commit, at its first file.
+  ]f [f       Next or previous file of the commit, wrapping around.
+  ]h [h       Next or previous hunk in the diff.
+  K           The full commit message.
+  O           The commit on the origin remote's web host, at the file's diff
+              when on a file.
+  P           The commit's pull request on GitHub. Needs the GitHub CLI, gh.
+  <leader>gd  The unified diff. Set it with `keys.unified`.
+  <leader>gD  The split diff. Set it with `keys.split`.
+  q           Close the tab. Closing the list or a diff window with :q
+              closes it too.
+
+In the list only:
+
+  y           Copy the commit's short hash, or hash:path on a file.
+
+The unified diff shows the file as of the commit: added and changed lines
+highlighted, removed lines shown above them, and unchanged lines folded. The
+split diff shows the file before the commit on the left and the commit's file
+on the right, in Neovim's diff mode.
+
+The list reloads when a ref of the repo changes, like after a commit, a
+rebase or a fetch.
+
+==============================================================================
+3. Setup                                                      *commits-setup*
+
+setup() is optional. These are the defaults: >lua
+
+    require("commits").setup({
+      -- The diff a browser starts with: "unified" or "split".
+      diff = "unified",
+      -- The keys that switch the diff. false leaves one unset.
+      keys = {
+        unified = "<leader>gd",
+        split = "<leader>gD",
+      },
+    })
+<
+Map the functions in |commits-usage| to open the browser, for example: >lua
+
+    local commits = require("commits")
+    vim.keymap.set("n", "<leader>gl", commits.log)
+    vim.keymap.set("n", "<leader>gh", commits.file)
+    vim.keymap.set("x", "<leader>gh", commits.lines)
+    vim.keymap.set("n", "<leader>gm", commits.branch)
+<
+==============================================================================
+4. The view worktree                                           *commits-view*
+
+The diff shows the real file, checked out in a worktree of the repo at
+`<git dir>/commits-view`, so language servers work in it as in any file. The
+worktree is created the first time and kept. It shares the repo's objects, so
+it needs no fetch. Its files are read-only. A file the commit deleted shows in
+a scratch buffer instead.
+
+The checkout's node_modules folders, up to three levels down, are linked into
+the worktree, so imports resolve. They hold the checkout's installed packages,
+not the commit's.
+
+==============================================================================
+5. Colors                                                    *commits-colors*
+
+Each group is a default, so a color scheme or your config can set it.
+
+  CommitsAdded       Added line counts and the A status. Added's text color.
+  CommitsRemoved     Removed line counts and the D status.
+  CommitsChanged     The M status.
+  CommitsSelected    The selected file in the list. Links to Visual.
+  CommitsAddLine     Added lines in the unified diff. Links to GitSignsAddLn
+                     when gitsigns is installed, and DiffAdd when it isn't.
+  CommitsChangeLine  Changed lines. GitSignsChangeLn or DiffChange.
+  CommitsDeleteLine  Removed lines. GitSignsDeleteVirtLn or DiffDelete.
+
+The split diff colors its sides with CommitsSplitAdd, CommitsSplitAddText,
+CommitsSplitRemove and CommitsSplitRemoveText. They're mixed from the theme's
+Added and Removed colors and set again when the color scheme changes.
+
+ vim:tw=78:ts=8:ft=help:norl:

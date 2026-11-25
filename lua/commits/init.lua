@@ -337,8 +337,8 @@ local function view_for(root)
 end
 
 -- Check out a commit in the view and reload its files that are open.
--- Tell the language servers working there which files changed, since the
--- vtsls watcher in init.lua skips paths under .git.
+-- Tell the language servers working there which files changed, since file
+-- watchers often skip paths under .git, where the view is.
 local function checkout(state, hash)
 	if state.checked_out == hash then
 		return true
