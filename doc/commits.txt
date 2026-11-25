@@ -171,9 +171,10 @@ require("commits").unified()                              *commits.unified()*
 <
 require("commits").split()                                  *commits.split()*
     Show the changes as a split diff, with the index's file on the left, as
-    the browser's split diff. Again closes it. Edits to the buffer show as
-    you make them. Staging doesn't, until the split opens again. For
-    example: >lua
+    the browser's split diff. Again closes it, and so do q and <Esc> on
+    either side. While it's open they replace the buffer's own q and <Esc>,
+    which come back when it closes. Edits to the buffer show as you make
+    them. Staging doesn't, until the split opens again. For example: >lua
 
     vim.keymap.set("n", "<leader>gD", require("commits").split)
 <

@@ -100,6 +100,20 @@ function M.toggle()
 	vim.b[buf].commits_index = true
 	left = vim.api.nvim_open_win(buf, false, { split = "left", win = right })
 	vim.wo[left].winbar = "%#Identifier#index%* " .. vim.fn.fnamemodify(path, ":~:.")
+	-- q or <Esc> on either side closes the split. On the file's side they replace
+	-- what its buffer had on those keys until the split closes.
+	local function close()
+		if vim.api.nvim_win_is_valid(left) then
+			vim.api.nvim_win_close(left, false)
+		end
+	end
+	local keys, previous = { "q", "<Esc>" }, {}
+	for _, lhs in ipairs(keys) do
+		local mapping = vim.fn.maparg(lhs, "n", false, true)
+		previous[lhs] = mapping.buffer == 1 and mapping or nil
+		vim.keymap.set("n", lhs, close, { buffer = buf, nowait = true })
+		vim.keymap.set("n", lhs, close, { buffer = file, nowait = true })
+	end
 	local saved = {}
 	for _, name in ipairs({ "winhighlight", "fillchars" }) do
 		saved[name] = vim.api.nvim_get_option_value(name, { win = right })
@@ -110,13 +124,23 @@ function M.toggle()
 			vim.cmd("diffthis")
 		end)
 	end
-	-- However the left side closes, turn diff mode off on the right and put
-	-- its colors back.
+	-- However the left side closes, put the file's keys back, turn diff mode off
+	-- on the right and put its colors back.
 	vim.api.nvim_create_autocmd("WinClosed", {
 		group = group,
 		pattern = tostring(left),
 		once = true,
 		callback = function()
+			if vim.api.nvim_buf_is_valid(file) then
+				vim.api.nvim_buf_call(file, function()
+					for _, lhs in ipairs(keys) do
+						pcall(vim.keymap.del, "n", lhs, { buffer = file })
+						if previous[lhs] then
+							vim.fn.mapset(previous[lhs])
+						end
+					end
+				end)
+			end
 			if not vim.api.nvim_win_is_valid(right) then
 				return
 			end
