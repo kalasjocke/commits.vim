@@ -10,17 +10,17 @@
 --   K       the full commit message
 --   O       the commit on GitHub, at the file when on one
 --   P       the commit's pull request on GitHub
---   ,gd     the unified diff
---   ,gD     the split diff
+--   <leader>gd  the unified diff, set with setup({ keys = { unified = ... } })
+--   <leader>gD  the split diff, set with setup({ keys = { split = ... } })
 --   q       close the tab
 --
 -- And in the list only:
 --
 --   y       copy the commit's short hash, or hash:path on a file
 --
--- The unified diff shows the file as of the commit, as ,gd shows a buffer's
--- changes with gitsigns: added and changed lines highlighted, removed lines
--- shown above them, and unchanged lines folded. The split diff shows it as ,gD
+-- The unified diff shows the file as of the commit, as gitsigns shows a
+-- buffer's changes: added and changed lines highlighted, removed lines shown
+-- above them, and unchanged lines folded. The split diff shows it as GitHub
 -- does, with the file before the commit on the left, in Neovim's diff mode.
 -- setup({ diff = "split" }) makes the split the one a new browser starts with.
 -- Closing the list or a diff window with :q closes the tab.
@@ -39,10 +39,15 @@ local M = {}
 M.config = {
 	-- The diff a browser starts with: "unified" or "split".
 	diff = "unified",
+	-- The keys that switch the diff in the browser. false leaves one unset.
+	keys = {
+		unified = "<leader>gd",
+		split = "<leader>gD",
+	},
 }
 
 function M.setup(opts)
-	M.config = vim.tbl_extend("force", M.config, opts or {})
+	M.config = vim.tbl_deep_extend("force", M.config, opts or {})
 end
 
 local ns = vim.api.nvim_create_namespace("commits")
@@ -361,7 +366,7 @@ end
 
 -- The keys of the list and the diff, besides <CR> and o in the list. Set
 -- further down, as they call functions defined there.
-local keys, map
+local keys, map, bindings
 
 -- The browser state of each buffer the diff window shows.
 local showing = {}
@@ -374,7 +379,7 @@ local function release(buf)
 	end
 	showing[buf] = nil
 	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-	for lhs in pairs(keys) do
+	for lhs in pairs(bindings()) do
 		pcall(vim.keymap.del, "n", lhs, { buffer = buf })
 	end
 	if #vim.fn.win_findbuf(buf) == 0 then
@@ -756,19 +761,6 @@ keys = {
 	["[h"] = function(state)
 		step_hunk(state, -1)
 	end,
-	["<leader>gd"] = function(state)
-		if state.split then
-			state.split = false
-			close_split(state)
-			show(state, state.current.commit, state.current.file)
-		end
-	end,
-	["<leader>gD"] = function(state)
-		if not state.split then
-			state.split = true
-			show(state, state.current.commit, state.current.file)
-		end
-	end,
 	K = show_message,
 	O = open_remote,
 	P = open_pull_request,
@@ -777,8 +769,37 @@ keys = {
 	end,
 }
 
+-- The keys that switch the diff, under their names in config.keys.
+local switches = {
+	unified = function(state)
+		if state.split then
+			state.split = false
+			close_split(state)
+			show(state, state.current.commit, state.current.file)
+		end
+	end,
+	split = function(state)
+		if not state.split then
+			state.split = true
+			show(state, state.current.commit, state.current.file)
+		end
+	end,
+}
+
+-- The keys above with the switches at the keys config gives them.
+function bindings()
+	local all = vim.deepcopy(keys)
+	for name, fn in pairs(switches) do
+		local lhs = M.config.keys[name]
+		if lhs then
+			all[lhs] = fn
+		end
+	end
+	return all
+end
+
 function map(state, buf)
-	for lhs, fn in pairs(keys) do
+	for lhs, fn in pairs(bindings()) do
 		vim.keymap.set("n", lhs, function()
 			fn(state)
 		end, { buffer = buf, nowait = true })
