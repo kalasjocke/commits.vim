@@ -694,8 +694,11 @@ local function open_remote(state)
 end
 
 -- The pull request the commit is part of, or was squash merged in. GitHub
--- only knows commits that were pushed.
+-- only knows commits that were pushed. It's found with the GitHub CLI.
 local function open_pull_request(state)
+	if vim.fn.executable("gh") == 0 then
+		return vim.notify("Finding the pull request needs the GitHub CLI, gh", vim.log.levels.WARN)
+	end
 	local commit = target(state)
 	local api = "repos/{owner}/{repo}/commits/" .. commit.hash .. "/pulls"
 	local cmd = { "gh", "api", api, "--jq", ".[0].html_url // empty" }
