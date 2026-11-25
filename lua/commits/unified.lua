@@ -1,8 +1,11 @@
 -- The unified diff: a buffer's added and changed lines highlighted, and the
 -- lines it removed shown above them. The commit browser draws it for a commit's
--- file.
+-- file, and toggle() for a buffer's changes since the index.
 
 local M = {}
+
+local ns = vim.api.nvim_create_namespace("commits.unified")
+local group = vim.api.nvim_create_augroup("commits.unified", { clear = true })
 
 -- The buffer's lines. An empty buffer has no lines, not one empty line.
 function M.lines(buf)
@@ -58,6 +61,76 @@ function M.draw(buf, ns, old, hunks)
 			vim.api.nvim_buf_set_extmark(buf, ns, anchor - 1, 0, { virt_lines = virt_lines, virt_lines_above = above })
 		end
 	end
+end
+
+-- The buffers toggle() shows the changes of, each with the index's lines, the
+-- timer that delays a redraw and the function that stops watching the index.
+local showing = {}
+
+local function redraw(buf)
+	local view = showing[buf]
+	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+	M.draw(buf, ns, view.index, M.diff(view.index, M.lines(buf)))
+end
+
+local function stop(buf)
+	local view = showing[buf]
+	showing[buf] = nil
+	view.timer:close()
+	view.unwatch()
+	vim.api.nvim_clear_autocmds({ group = group, buffer = buf })
+	if vim.api.nvim_buf_is_valid(buf) then
+		vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+	end
+end
+
+-- Show the current buffer's changes since the index as a unified diff, or stop
+-- showing them. The diff follows edits as you make them, and staging or a
+-- commit when git writes the index.
+function M.toggle()
+	local buf = vim.api.nvim_get_current_buf()
+	if showing[buf] then
+		return stop(buf)
+	end
+	local index = require("commits.index")
+	local path = vim.api.nvim_buf_get_name(buf)
+	local lines = vim.bo[buf].buftype == "" and path ~= "" and index.lines(path)
+	if not lines then
+		return vim.notify("Not a file in a git repo", vim.log.levels.WARN)
+	end
+	local view = { index = lines, timer = vim.uv.new_timer() }
+	showing[buf] = view
+	-- Redraw a moment after the last change, not on each key.
+	local function later()
+		view.timer:start(
+			100,
+			0,
+			vim.schedule_wrap(function()
+				if showing[buf] == view then
+					redraw(buf)
+				end
+			end)
+		)
+	end
+	view.unwatch = index.watch(path, function()
+		if showing[buf] == view then
+			view.index = index.lines(path) or {}
+			later()
+		end
+	end)
+	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufReadPost" }, {
+		group = group,
+		buffer = buf,
+		callback = later,
+	})
+	vim.api.nvim_create_autocmd("BufUnload", {
+		group = group,
+		buffer = buf,
+		callback = function()
+			stop(buf)
+		end,
+	})
+	redraw(buf)
 end
 
 return M

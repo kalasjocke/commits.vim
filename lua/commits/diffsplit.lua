@@ -78,25 +78,6 @@ local function index_window()
 	end
 end
 
--- The buffer's file as the index has it. A file git doesn't track yet has no
--- lines there, so all of its lines show as added.
-local function index_lines(path)
-	local dir, name = vim.fs.dirname(path), vim.fs.basename(path)
-	local inside = vim.system({ "git", "-C", dir, "rev-parse", "--is-inside-work-tree" }):wait()
-	if inside.code ~= 0 then
-		return nil
-	end
-	local show = vim.system({ "git", "-C", dir, "show", ":./" .. name }, { text = true }):wait()
-	if show.code ~= 0 then
-		return {}
-	end
-	local lines = vim.split(show.stdout, "\n")
-	if lines[#lines] == "" then
-		table.remove(lines)
-	end
-	return lines
-end
-
 -- Show the current buffer's changes as a split diff, with the index on the
 -- left, or close the split when it's open. Edits to the buffer show as you
 -- make them. Staging doesn't, until the split opens again.
@@ -107,7 +88,7 @@ function M.toggle()
 	end
 	local right, file = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
 	local path = vim.api.nvim_buf_get_name(file)
-	local lines = vim.bo[file].buftype == "" and path ~= "" and index_lines(path)
+	local lines = vim.bo[file].buftype == "" and path ~= "" and require("commits.index").lines(path)
 	if not lines then
 		return vim.notify("Not a file in a git repo", vim.log.levels.WARN)
 	end

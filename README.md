@@ -44,10 +44,11 @@ vim.keymap.set("n", "<leader>gl", commits.log) -- the last 100 commits
 vim.keymap.set("n", "<leader>gh", commits.file) -- the commits that changed this file
 vim.keymap.set("x", "<leader>gh", commits.lines) -- or these lines
 vim.keymap.set("n", "<leader>gm", commits.branch) -- this branch's commits, oldest first
-vim.keymap.set("n", "<leader>gD", commits.split) -- this buffer's changes as a split diff
+vim.keymap.set("n", "<leader>gd", commits.unified) -- this buffer's changes as a unified diff
+vim.keymap.set("n", "<leader>gD", commits.split) -- or as a split diff
 ```
 
-`commits.split` shows the current buffer's uncommitted changes the same way as the browser's split diff, with the index on the left. Pressing the key again closes it.
+`commits.unified` and `commits.split` show the current buffer's uncommitted changes the same way as the browser's diffs, compared with the index. Pressing the key again hides them.
 
 See `:help commits` for the keys in the browser, the options and the colors.
 

@@ -8,7 +8,7 @@ CONTENTS                                                      *commits*
   3. Setup ............................................... |commits-setup|
   4. The view worktree .................................... |commits-view|
   5. Colors ............................................. |commits-colors|
-  6. A buffer's changes ................................... |commits-split|
+  6. A buffer's changes ................................. |commits-unified|
 
 ==============================================================================
 1. Usage                                                      *commits-usage*
@@ -125,14 +125,26 @@ CommitsSplitRemove and CommitsSplitRemoveText. They're mixed from the theme's
 Added and Removed colors and set again when the color scheme changes.
 
 ==============================================================================
-6. A buffer's changes                                         *commits-split*
+6. A buffer's changes                       *commits-unified* *commits-split*
 
+Two toggles show the current buffer's uncommitted changes, the way the
+browser shows a commit's. Both compare the buffer with the file as the index
+has it, so staged changes don't show. A file git doesn't track yet shows all
+its lines as added.
+
+require("commits").unified()                              *commits.unified()*
+    Highlight the added and changed lines and show the removed lines above
+    them, as the browser's unified diff. Again hides them. The diff follows
+    edits as you make them, and staging or a commit when git writes the
+    index. It's per buffer. For example: >lua
+
+    vim.keymap.set("n", "<leader>gd", require("commits").unified)
+<
 require("commits").split()                                  *commits.split()*
-    Show the current buffer's changes as a split diff, with the file as the
-    index has it on the left, colored as the browser's split diff. Again
-    closes it. Edits to the buffer show as you make them. Staging doesn't,
-    until the split opens again. A file git doesn't track yet shows all its
-    lines as added. For example: >lua
+    Show the changes as a split diff, with the index's file on the left, as
+    the browser's split diff. Again closes it. Edits to the buffer show as
+    you make them. Staging doesn't, until the split opens again. For
+    example: >lua
 
     vim.keymap.set("n", "<leader>gD", require("commits").split)
 <

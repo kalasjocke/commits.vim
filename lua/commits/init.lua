@@ -1030,4 +1030,10 @@ function M.split()
 	require("commits.diffsplit").toggle()
 end
 
+-- The current buffer's uncommitted changes as a unified diff: added and changed
+-- lines highlighted and removed lines shown above them. Again hides them.
+function M.unified()
+	unified.toggle()
+end
+
 return M
