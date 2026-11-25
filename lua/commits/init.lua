@@ -367,8 +367,14 @@ end
 -- further down, as they call functions defined there.
 local keys, map, bindings
 
--- The browser state of each buffer the diff window shows.
+-- The browser each of its buffers belongs to: the list, the split's left side
+-- and the file the diff window shows.
 local showing = {}
+
+-- The browser the current buffer belongs to, if any.
+local function current()
+	return showing[vim.api.nvim_get_current_buf()]
+end
 
 -- Take the diff off a buffer the diff window no longer shows, and close it
 -- when no other window shows it either.
@@ -494,6 +500,7 @@ local function show_split(state, commit, path, old)
 	if not (state.old_win and vim.api.nvim_win_is_valid(state.old_win)) then
 		state.old_buf = scratch()
 		state.old_win = vim.api.nvim_open_win(state.old_buf, false, { split = "left", win = state.diff_win })
+		showing[state.old_buf] = state
 		map(state, state.old_buf)
 		-- Closing it with :q closes the tab, as for the other two windows.
 		state.old_closed = vim.api.nvim_create_autocmd("WinClosed", {
@@ -531,7 +538,10 @@ local function close_split(state)
 		vim.api.nvim_del_autocmd(state.old_closed)
 		vim.api.nvim_win_close(state.old_win, true)
 	end
-	state.old_win = nil
+	if state.old_buf then
+		showing[state.old_buf] = nil
+	end
+	state.old_win, state.old_buf = nil, nil
 	vim.api.nvim_win_call(state.diff_win, function()
 		vim.cmd("diffoff")
 	end)
@@ -752,47 +762,101 @@ local function toggle(state)
 	render(state)
 end
 
+-- The browser's actions, for keys to call. Each one acts on the browser the
+-- current buffer belongs to, and does nothing outside one.
+local function action(fn)
+	return function()
+		local state = current()
+		if state then
+			fn(state)
+		end
+	end
+end
+
+-- The next or previous commit, at its first file.
+M.next_commit = action(function(state)
+	step_commit(state, 1)
+end)
+M.prev_commit = action(function(state)
+	step_commit(state, -1)
+end)
+
+-- The next or previous file of the commit, wrapping around.
+M.next_file = action(function(state)
+	step_file(state, 1)
+end)
+M.prev_file = action(function(state)
+	step_file(state, -1)
+end)
+
+-- The next or previous hunk in the diff.
+M.next_hunk = action(function(state)
+	step_hunk(state, 1)
+end)
+M.prev_hunk = action(function(state)
+	step_hunk(state, -1)
+end)
+
+-- The full commit message, in the middle of the screen.
+M.message = action(show_message)
+
+-- The commit on the origin remote's web host, at the file's diff when on one.
+M.browse = action(open_remote)
+
+-- The commit's pull request on GitHub.
+M.pull_request = action(open_pull_request)
+
+-- In the list, on a commit: show or hide its files. On a file: open its diff.
+M.select = action(function(state)
+	if vim.api.nvim_get_current_buf() == state.list_buf then
+		toggle(state)
+	end
+end)
+
+-- Copy the commit's short hash, or hash:path on a file.
+M.copy = action(copy_hash)
+
+-- Close the browser's tab.
+M.close = action(function()
+	vim.cmd.tabclose()
+end)
+
+-- Switch the browser to the unified or the split diff.
+local function switch_unified(state)
+	if state.split then
+		state.split = false
+		close_split(state)
+		show(state, state.current.commit, state.current.file)
+	end
+end
+local function switch_split(state)
+	if not state.split then
+		state.split = true
+		show(state, state.current.commit, state.current.file)
+	end
+end
+
 keys = {
-	["]c"] = function(state)
-		step_commit(state, 1)
-	end,
-	["[c"] = function(state)
-		step_commit(state, -1)
-	end,
-	["]f"] = function(state)
-		step_file(state, 1)
-	end,
-	["[f"] = function(state)
-		step_file(state, -1)
-	end,
-	["]h"] = function(state)
-		step_hunk(state, 1)
-	end,
-	["[h"] = function(state)
-		step_hunk(state, -1)
-	end,
-	M = show_message,
-	O = open_remote,
-	P = open_pull_request,
-	q = function()
-		vim.cmd.tabclose()
-	end,
+	["]c"] = M.next_commit,
+	["[c"] = M.prev_commit,
+	["]f"] = M.next_file,
+	["[f"] = M.prev_file,
+	["]h"] = M.next_hunk,
+	["[h"] = M.prev_hunk,
+	M = M.message,
+	O = M.browse,
+	P = M.pull_request,
+	q = M.close,
 }
 
--- The keys that switch the diff, under their names in config.keys.
+-- The keys that switch the diff, under their names in config.keys. M.unified
+-- and M.split switch the diff in a browser.
 local switches = {
-	unified = function(state)
-		if state.split then
-			state.split = false
-			close_split(state)
-			show(state, state.current.commit, state.current.file)
-		end
+	unified = function()
+		M.unified()
 	end,
-	split = function(state)
-		if not state.split then
-			state.split = true
-			show(state, state.current.commit, state.current.file)
-		end
+	split = function()
+		M.split()
 	end,
 }
 
@@ -808,11 +872,9 @@ function bindings()
 	return all
 end
 
-function map(state, buf)
+function map(_, buf)
 	for lhs, fn in pairs(bindings()) do
-		vim.keymap.set("n", lhs, function()
-			fn(state)
-		end, { buffer = buf, nowait = true })
+		vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true })
 	end
 end
 
@@ -984,15 +1046,12 @@ function M.open(args, opts)
 	}) do
 		vim.wo[state.list_win][option] = value
 	end
+	showing[state.list_buf] = state
 	map(state, state.list_buf)
 	for _, lhs in ipairs({ "<CR>", "o" }) do
-		vim.keymap.set("n", lhs, function()
-			toggle(state)
-		end, { buffer = state.list_buf })
+		vim.keymap.set("n", lhs, M.select, { buffer = state.list_buf })
 	end
-	vim.keymap.set("n", "y", function()
-		copy_hash(state)
-	end, { buffer = state.list_buf, nowait = true })
+	vim.keymap.set("n", "y", M.copy, { buffer = state.list_buf, nowait = true })
 	-- Closing the list or the diff some other way than q, like :q, closes the
 	-- tab too.
 	for _, win in ipairs({ state.list_win, state.diff_win }) do
@@ -1010,6 +1069,10 @@ function M.open(args, opts)
 						vim.cmd.tabclose(vim.api.nvim_tabpage_get_number(tab))
 					end
 					release(state.diff_buf)
+					showing[state.list_buf] = nil
+					if state.old_buf then
+						showing[state.old_buf] = nil
+					end
 				end)
 			end,
 		})
@@ -1053,14 +1116,23 @@ function M.lines()
 end
 
 -- The current buffer's uncommitted changes as a split diff, with the index on
--- the left. Again closes it.
+-- the left. Again closes it. In a browser, switch it to the split diff.
 function M.split()
+	local state = current()
+	if state then
+		return switch_split(state)
+	end
 	require("commits.diffsplit").toggle()
 end
 
 -- The current buffer's uncommitted changes as a unified diff: added and changed
--- lines highlighted and removed lines shown above them. Again hides them.
+-- lines highlighted and removed lines shown above them. Again hides them. In a
+-- browser, switch it to the unified diff.
 function M.unified()
+	local state = current()
+	if state then
+		return switch_unified(state)
+	end
 	unified.toggle()
 end
 
