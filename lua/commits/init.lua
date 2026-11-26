@@ -497,11 +497,10 @@ local function show_diff(state, buf, old)
 	if not state.split then
 		unified.draw(buf, ns, old, diff)
 	end
-	local hunks, keep = {}, {}
+	local hunks, keep = unified.starts(diff), {}
 	for _, hunk in ipairs(diff) do
-		local _, old_count, new_start, new_count = unpack(hunk)
-		local anchor, above = unified.anchor(hunk)
-		table.insert(hunks, { line = anchor, above = above and old_count or 0 })
+		local _, _, new_start, new_count = unpack(hunk)
+		local anchor = unified.anchor(hunk)
 		local last = new_count > 0 and new_start + new_count - 1 or anchor
 		for line = anchor - context, last + context do
 			keep[line] = true
@@ -587,25 +586,24 @@ local function close_split(state)
 	end
 end
 
--- Move to the start of the next or previous hunk, with its removed lines in
--- view.
+-- Put the current window's cursor at the start of the hunk, in the middle of
+-- the window, with its removed lines in view.
+local function go_to_hunk(hunk)
+	vim.api.nvim_win_set_cursor(0, { hunk.line, 0 })
+	vim.cmd("normal! zz")
+	if hunk.line == 1 then
+		vim.fn.winrestview({ topline = 1, topfill = hunk.above })
+	end
+end
+
+-- Move to the start of the next or previous hunk, wrapping around at the last
+-- and first.
 local function jump_hunk(state, direction, from)
 	local cursor = from or vim.api.nvim_win_get_cursor(state.diff_win)[1]
-	local target = nil
-	for _, hunk in ipairs(state.hunks) do
-		if direction > 0 and hunk.line > cursor and not target then
-			target = hunk
-		elseif direction < 0 and hunk.line < cursor then
-			target = hunk
-		end
-	end
+	local target = unified.step(state.hunks, cursor, direction)
 	vim.api.nvim_win_call(state.diff_win, function()
 		if target then
-			vim.api.nvim_win_set_cursor(0, { target.line, 0 })
-			vim.cmd("normal! zz")
-			if target.line == 1 then
-				vim.fn.winrestview({ topline = 1, topfill = target.above })
-			end
+			go_to_hunk(target)
 		end
 		-- Diff mode lines the left side up when the right one scrolls, which
 		-- moving its cursor from here doesn't do. Scroll it down and back.
@@ -817,21 +815,93 @@ M.prev_commit = action(function(state)
 	step_commit(state, -1)
 end)
 
--- The next or previous file of the commit, wrapping around.
-M.next_file = action(function(state)
-	step_file(state, 1)
-end)
-M.prev_file = action(function(state)
-	step_file(state, -1)
-end)
+-- Outside a browser, the file and hunk keys act on the current buffer. On
+-- HEAD's side of commits.split(), they act on the file's side.
+local function file_side()
+	local win = vim.b.commits_head and require("commits.diffsplit").file_window()
+	if win then
+		vim.api.nvim_set_current_win(win)
+	end
+end
 
--- The next or previous hunk in the diff.
-M.next_hunk = action(function(state)
-	step_hunk(state, 1)
-end)
-M.prev_hunk = action(function(state)
-	step_hunk(state, -1)
-end)
+-- Open the next or previous file with changes since HEAD, as git status lists
+-- them, wrapping around. The unified or split diff of the buffer's changes
+-- stays on for the file it opens.
+local function step_changed_file(direction)
+	file_side()
+	local root, path = repo()
+	if not root then
+		return vim.notify("Not in a git repo", vim.log.levels.WARN)
+	end
+	local files = require("commits.status").files(root)
+	if #files == 0 then
+		return vim.notify("No changed files", vim.log.levels.WARN)
+	end
+	local target = path
+	for _ = 1, vim.v.count1 do
+		target = require("commits.status").step(files, target, direction)
+	end
+	if target == path then
+		return
+	end
+	local diffsplit = require("commits.diffsplit")
+	local split = diffsplit.file_window() == vim.api.nvim_get_current_win()
+	local shown = unified.shown(vim.api.nvim_get_current_buf())
+	local ok, err = pcall(vim.cmd.edit, vim.fn.fnameescape(root .. "/" .. target))
+	if not ok then
+		return vim.notify(err, vim.log.levels.ERROR)
+	end
+	if shown and not unified.shown(vim.api.nvim_get_current_buf()) then
+		unified.toggle()
+	end
+	if split then
+		diffsplit.close()
+		diffsplit.toggle()
+	end
+end
+
+-- Move to the next or previous hunk of the current buffer's changes since
+-- HEAD, wrapping around at the last and first.
+local function step_buffer_hunk(direction)
+	file_side()
+	local buf = vim.api.nvim_get_current_buf()
+	local path = vim.api.nvim_buf_get_name(buf)
+	local old = vim.bo[buf].buftype == "" and path ~= "" and require("commits.head").lines(path)
+	if not old then
+		return
+	end
+	local hunks = unified.starts(unified.diff(old, unified.lines(buf)))
+	local line, target = vim.fn.line("."), nil
+	for _ = 1, vim.v.count1 do
+		target = unified.step(hunks, line, direction)
+		line = target and target.line or line
+	end
+	if target then
+		go_to_hunk(target)
+	end
+end
+
+-- Call in_browser in a browser and outside with the direction.
+local function either(in_browser, outside, direction)
+	return function()
+		local state = current()
+		if state then
+			in_browser(state, direction)
+		else
+			outside(direction)
+		end
+	end
+end
+
+-- The next or previous file of the commit, wrapping around. Outside a browser,
+-- the next or previous file git status lists.
+M.next_file = either(step_file, step_changed_file, 1)
+M.prev_file = either(step_file, step_changed_file, -1)
+
+-- The next or previous hunk in the diff, wrapping around. Outside a browser,
+-- the next or previous hunk of the buffer's changes since HEAD.
+M.next_hunk = either(step_hunk, step_buffer_hunk, 1)
+M.prev_hunk = either(step_hunk, step_buffer_hunk, -1)
 
 -- The full commit message, in the middle of the screen.
 M.message = action(show_message)
@@ -1122,7 +1192,7 @@ function M.lines()
 	M.open({ "-L", range, "-s" }, { root = root, path = path })
 end
 
--- The current buffer's uncommitted changes as a split diff, with the index on
+-- The current buffer's uncommitted changes as a split diff, with HEAD on
 -- the left. Again closes it. In a browser, switch it to the split diff.
 function M.split()
 	local state = current()

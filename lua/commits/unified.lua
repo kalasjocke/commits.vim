@@ -1,6 +1,6 @@
 -- The unified diff: a buffer's added and changed lines highlighted, and the
 -- lines it removed shown above them. The commit browser draws it for a commit's
--- file, and toggle() for a buffer's changes since the index.
+-- file, and toggle() for a buffer's changes since HEAD.
 
 local M = {}
 
@@ -37,6 +37,35 @@ function M.anchor(hunk)
 	return math.max(new_start, 1), new_count > 0 or new_start == 0
 end
 
+-- Where each hunk starts: the line, and the number of removed lines drawn
+-- above it.
+function M.starts(hunks)
+	local starts = {}
+	for _, hunk in ipairs(hunks) do
+		local anchor, above = M.anchor(hunk)
+		table.insert(starts, { line = anchor, above = above and hunk[2] or 0 })
+	end
+	return starts
+end
+
+-- The start after or before the line, wrapping around at the last and first.
+function M.step(starts, line, direction)
+	if direction > 0 then
+		for _, start in ipairs(starts) do
+			if start.line > line then
+				return start
+			end
+		end
+		return starts[1]
+	end
+	for i = #starts, 1, -1 do
+		if starts[i].line < line then
+			return starts[i]
+		end
+	end
+	return starts[#starts]
+end
+
 -- Highlight the hunks' new lines in the buffer and put their old lines above
 -- them, in the namespace.
 function M.draw(buf, ns, old, hunks)
@@ -63,14 +92,19 @@ function M.draw(buf, ns, old, hunks)
 	end
 end
 
--- The buffers toggle() shows the changes of, each with the index's lines, the
--- timer that delays a redraw and the function that stops watching the index.
+-- The buffers toggle() shows the changes of, each with HEAD's lines, the timer
+-- that delays a redraw and the function that stops watching HEAD.
 local showing = {}
+
+-- Whether toggle() shows the buffer's changes.
+function M.shown(buf)
+	return showing[buf] ~= nil
+end
 
 local function redraw(buf)
 	local view = showing[buf]
 	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-	M.draw(buf, ns, view.index, M.diff(view.index, M.lines(buf)))
+	M.draw(buf, ns, view.head, M.diff(view.head, M.lines(buf)))
 end
 
 local function stop(buf)
@@ -84,21 +118,21 @@ local function stop(buf)
 	end
 end
 
--- Show the current buffer's changes since the index as a unified diff, or stop
--- showing them. The diff follows edits as you make them, and staging or a
--- commit when git writes the index.
+-- Show the current buffer's changes since HEAD as a unified diff, or stop
+-- showing them. The diff follows edits as you make them, and HEAD when it
+-- moves, like after a commit.
 function M.toggle()
 	local buf = vim.api.nvim_get_current_buf()
 	if showing[buf] then
 		return stop(buf)
 	end
-	local index = require("commits.index")
+	local head = require("commits.head")
 	local path = vim.api.nvim_buf_get_name(buf)
-	local lines = vim.bo[buf].buftype == "" and path ~= "" and index.lines(path)
+	local lines = vim.bo[buf].buftype == "" and path ~= "" and head.lines(path)
 	if not lines then
 		return vim.notify("Not a file in a git repo", vim.log.levels.WARN)
 	end
-	local view = { index = lines, timer = vim.uv.new_timer() }
+	local view = { head = lines, timer = vim.uv.new_timer() }
 	showing[buf] = view
 	-- Redraw a moment after the last change, not on each key.
 	local function later()
@@ -112,9 +146,9 @@ function M.toggle()
 			end)
 		)
 	end
-	view.unwatch = index.watch(path, function()
+	view.unwatch = head.watch(path, function()
 		if showing[buf] == view then
-			view.index = index.lines(path) or {}
+			view.head = head.lines(path) or {}
 			later()
 		end
 	end)

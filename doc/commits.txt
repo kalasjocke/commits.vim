@@ -55,8 +55,8 @@ Each key calls a function on the module. Without an `on_attach` in
               commits.prev_commit()   file.
   ]f [f       commits.next_file()     Next or previous file of the commit,
               commits.prev_file()     wrapping around.
-  ]h [h       commits.next_hunk()     Next or previous hunk in the diff.
-              commits.prev_hunk()
+  ]h [h       commits.next_hunk()     Next or previous hunk in the diff,
+              commits.prev_hunk()     wrapping around.
   M           commits.message()       The full commit message, in the middle
                                       of the screen. q or <Esc> closes it.
   O           commits.browse()        The commit on the origin remote's web
@@ -71,9 +71,9 @@ Each key calls a function on the module. Without an `on_attach` in
                                       diff window with :q closes it too.
 
 <CR>, o and y are in the list only. Each function acts on the browser the
-current buffer belongs to, and does nothing outside one. commits.unified() and
-commits.split() show a buffer's own changes outside a browser, see
-|commits-unified|, so one global key can do both.
+current buffer belongs to, and does nothing outside one. commits.unified(),
+commits.split() and the file and hunk functions act on a buffer's own changes
+outside a browser, see |commits-unified|, so one global key can do both.
 
 commits.toggle_files() has no default key. In the list, it shows or hides the
 files of the commit under the cursor, from the commit or one of its files.
@@ -169,25 +169,48 @@ Added and Removed colors and set again when the color scheme changes.
 6. A buffer's changes                       *commits-unified* *commits-split*
 
 Two toggles show the current buffer's uncommitted changes, the way the
-browser shows a commit's. Both compare the buffer with the file as the index
-has it, so staged changes don't show. A file git doesn't track yet shows all
-its lines as added.
+browser shows a commit's. Both compare the buffer with the file as HEAD has
+it, so staged and unstaged changes both show. A file HEAD doesn't have, like
+a new one, shows all its lines as added.
 
 require("commits").unified()                              *commits.unified()*
     Highlight the added and changed lines and show the removed lines above
     them, as the browser's unified diff. Again hides them. The diff follows
-    edits as you make them, and staging or a commit when git writes the
-    index. It's per buffer. For example: >lua
+    edits as you make them, and HEAD when it moves, like after a commit.
+    It's per buffer. For example: >lua
 
     vim.keymap.set("n", "<leader>gd", require("commits").unified)
 <
 require("commits").split()                                  *commits.split()*
-    Show the changes as a split diff, with the index's file on the left, as
-    the browser's split diff. Again closes it, and so do q and <Esc> on
-    either side. While it's open they replace the buffer's own q and <Esc>,
-    which come back when it closes. Edits to the buffer show as you make
-    them. Staging doesn't, until the split opens again. For example: >lua
+    Show the changes as a split diff, with HEAD's file on the left, as the
+    browser's split diff. Again closes it, and so do q and <Esc> on either
+    side. While it's open they replace the buffer's own q and <Esc>, which
+    come back when it closes. Edits to the buffer show as you make them. A
+    new commit doesn't, until the split opens again. For example: >lua
 
     vim.keymap.set("n", "<leader>gD", require("commits").split)
+<
+Outside a browser, the file and hunk functions move between your changes:
+
+require("commits").next_file()                          *commits.next_file()*
+require("commits").prev_file()                          *commits.prev_file()*
+    Open the next or previous file with changes since HEAD, as `git status`
+    lists them: staged, unstaged and untracked, sorted by path, wrapping
+    around. Deleted files are left out. When the unified or split diff shows
+    the buffer's changes, it shows the next file's too.
+
+require("commits").next_hunk()                          *commits.next_hunk()*
+require("commits").prev_hunk()                          *commits.prev_hunk()*
+    Move to the next or previous hunk of the buffer's changes since HEAD,
+    wrapping around. They find the hunks with or without the unified or split
+    diff on.
+
+On HEAD's side of the split, they act on the file's side. For example:
+>lua
+    local commits = require("commits")
+    vim.keymap.set("n", "]f", commits.next_file)
+    vim.keymap.set("n", "[f", commits.prev_file)
+    vim.keymap.set("n", "]h", commits.next_hunk)
+    vim.keymap.set("n", "[h", commits.prev_hunk)
 <
  vim:tw=78:ts=8:ft=help:norl:

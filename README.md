@@ -52,7 +52,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ## Usage
 
-`:Commits` takes `git log` arguments, like `:Commits main..HEAD --author=Joakim`. The plugin sets no global keys. Map the functions it has for common lists:
+`:Commits` takes `git log` arguments, like `:Commits main..HEAD --author=Joakim`. The plugin sets no global keys. Map the functions it has for common lists and for your uncommitted changes:
 
 ```lua
 local commits = require("commits")
@@ -63,6 +63,10 @@ vim.keymap.set("x", "<leader>gh", commits.lines) -- or these lines
 vim.keymap.set("n", "<leader>gm", commits.branch) -- this branch's commits, oldest first
 vim.keymap.set("n", "<leader>gd", commits.unified) -- this buffer's changes as a unified diff
 vim.keymap.set("n", "<leader>gD", commits.split) -- or as a split diff
+vim.keymap.set("n", "]f", commits.next_file) -- the next file git status lists
+vim.keymap.set("n", "[f", commits.prev_file)
+vim.keymap.set("n", "]h", commits.next_hunk) -- the next hunk of this buffer's changes
+vim.keymap.set("n", "[h", commits.prev_hunk)
 ```
 
 Each of the browser's keys calls a function, like `commits.next_commit`, so you can set your mapping with `on_attach`:

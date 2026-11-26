@@ -7,8 +7,8 @@
 -- each window maps the diff colors to its own.
 --
 -- The commit browser's split diff uses style(). toggle(), which is
--- commits.split(), shows the current buffer's changes the same way, with the
--- index on the left.
+-- commits.split(), shows the current buffer's changes the same way, with HEAD
+-- on the left.
 
 local M = {}
 
@@ -69,26 +69,42 @@ function M.style(left, right)
 	style(right, "right")
 end
 
--- The window in the current tab that shows the index for toggle().
-local function index_window()
+-- The window in the current tab that shows HEAD for toggle(), and the window
+-- of the file it's diffed with.
+local function head_window()
 	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-		if vim.b[vim.api.nvim_win_get_buf(win)].commits_index then
-			return win
+		if vim.b[vim.api.nvim_win_get_buf(win)].commits_head then
+			return win, vim.w[win].commits_file
 		end
 	end
 end
 
--- Show the current buffer's changes as a split diff, with the index on the
--- left, or close the split when it's open. Edits to the buffer show as you
--- make them. Staging doesn't, until the split opens again.
+-- The window of the file whose changes toggle() shows in the current tab, when
+-- the split is open.
+function M.file_window()
+	local _, file = head_window()
+	return file and vim.api.nvim_win_is_valid(file) and file or nil
+end
+
+-- Close the split toggle() opened in the current tab.
+function M.close()
+	local left = head_window()
+	if left then
+		vim.api.nvim_win_close(left, false)
+	end
+end
+
+-- Show the current buffer's changes as a split diff, with HEAD on the left, or
+-- close the split when it's open. Edits to the buffer show as you make them.
+-- A new commit doesn't, until the split opens again.
 function M.toggle()
-	local left = index_window()
+	local left = head_window()
 	if left then
 		return vim.api.nvim_win_close(left, false)
 	end
 	local right, file = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
 	local path = vim.api.nvim_buf_get_name(file)
-	local lines = vim.bo[file].buftype == "" and path ~= "" and require("commits.index").lines(path)
+	local lines = vim.bo[file].buftype == "" and path ~= "" and require("commits.head").lines(path)
 	if not lines then
 		return vim.notify("Not a file in a git repo", vim.log.levels.WARN)
 	end
@@ -97,9 +113,10 @@ function M.toggle()
 	vim.bo[buf].modifiable = false
 	vim.bo[buf].bufhidden = "wipe"
 	vim.bo[buf].filetype = vim.bo[file].filetype
-	vim.b[buf].commits_index = true
+	vim.b[buf].commits_head = true
 	left = vim.api.nvim_open_win(buf, false, { split = "left", win = right })
-	vim.wo[left].winbar = "%#Identifier#index%* " .. vim.fn.fnamemodify(path, ":~:.")
+	vim.w[left].commits_file = right
+	vim.wo[left].winbar = "%#Identifier#HEAD%* " .. vim.fn.fnamemodify(path, ":~:.")
 	-- q or <Esc> on either side closes the split. On the file's side they replace
 	-- what its buffer had on those keys until the split closes.
 	local function close()
